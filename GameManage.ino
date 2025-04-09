@@ -26,8 +26,6 @@ SemaphoreHandle_t buttonMutex;       // Semaphore bảo vệ trạng thái nút 
 bool buttonStates[NUM_BUTTONS] = {false};    // Trạng thái hiện tại của các nút
 bool lastButtonStates[NUM_BUTTONS] = {false}; // Trạng thái trước đó của các nút
 
-unsigned long lastActivityTime = 0; // Thời gian hoạt động cuối cùng (chưa dùng trong mã này)
-
 // Khai báo biến toàn cục từ file khác
 extern GameState currentState; // Trạng thái game hiện tại (MENU, GAME1, GAME2)
 extern int selectedGame;       // Trò chơi được chọn trong menu
@@ -35,7 +33,6 @@ extern bool menuNeedsRedraw;   // Cờ để vẽ lại menu
 extern bool firstRun;          // Cờ cho lần chạy đầu tiên
 
 // Biến bổ sung
-bool ignoreStuckButtons = false;      // Cờ để bỏ qua nút bị kẹt (chưa dùng)
 bool menuActive = true;               // Cờ kiểm tra menu có đang hoạt động không
 unsigned long lastStateChange = 0;    // Thời gian thay đổi trạng thái cuối cùng
 const unsigned long STATE_CHANGE_DELAY = 1000; // Độ trễ tối thiểu giữa các thay đổi trạng thái (ms)
@@ -76,7 +73,7 @@ void processButtonPress(Button btn) {
                 if (btn == BTN_RETURN) { // Nút RETURN: Quay lại menu
                     currentState = MENU;
                     menuNeedsRedraw = true;
-                    menuActive = true;
+                    menuActive = true; // Bật menu
                     vTaskDelay(200 / portTICK_PERIOD_MS); // Trễ để tránh nhấn liên tục
                 }
                 break;
@@ -89,6 +86,8 @@ void processButtonPress(Button btn) {
 void inputTask(void *parameter) {
     // Khởi tạo trạng thái ban đầu của các nút
     for (int i = 0; i < NUM_BUTTONS; i++) {
+        //Đọc giá trị từ pin của nút bấm (được xác định bởi hàm getPinForButton). 
+        //Nếu giá trị đọc được là LOW, điều này có nghĩa là nút bấm đang được nhấn
         lastButtonStates[i] = digitalRead(getPinForButton(static_cast<Button>(i))) == LOW;
         buttonStates[i] = lastButtonStates[i];
     }
@@ -98,7 +97,7 @@ void inputTask(void *parameter) {
             for (int i = 0; i < NUM_BUTTONS; i++) {
                 bool current = digitalRead(getPinForButton(static_cast<Button>(i))) == LOW;
 
-                // Phát hiện cạnh lên (từ không nhấn sang nhấn)
+                // Phát hiện có tín hiệu nhấn(current==LOW, lastButtonStates==HIGH)
                 if (current && !lastButtonStates[i]) {
                     vTaskDelay(30 / portTICK_PERIOD_MS); // Trễ 30ms để chống dội
                     if (digitalRead(getPinForButton(static_cast<Button>(i))) == LOW) { // Xác nhận lại

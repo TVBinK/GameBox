@@ -33,67 +33,58 @@ void drawBackgroundRacing() {
     }
 }
 
-// Hàm vẽ xe với chi tiết (thân, cửa sổ, bánh xe, đèn pha)
 void drawCar(int x, int y, uint16_t color) {
-    if (xSemaphoreTake(tftMutex, portMAX_DELAY) == pdTRUE) { // Đợi semaphore
-        // Thân xe chính: hình chữ nhật bo góc
-        display.fillRoundRect(x - CAR_WIDTH / 2, y - CAR_HEIGHT / 2, CAR_WIDTH, CAR_HEIGHT, 4, color);
+    if (xSemaphoreTake(tftMutex, portMAX_DELAY) == pdTRUE) {
+        // === Thân xe(Vẽ một hình chữ nhật có bo góc và đổ màu)  ===
+        //fillRoundRect(x, y, width, height, radius, color);
 
-        // Cửa sổ: hình chữ nhật nhỏ hơn ở giữa
-        int window_width = CAR_WIDTH - 8; // Chiều rộng cửa sổ
-        int window_height = CAR_HEIGHT / 3; // Chiều cao cửa sổ
-        display.fillRect(x - window_width / 2, y - window_height / 2, window_width, window_height, TFT_BLACK);
+        int body_width = 16;
+        int body_height = 40;
+        display.fillRoundRect(x - body_width / 2, y - body_height / 2, body_width, body_height, 3, color);
 
-        // Viền cửa sổ: tạo hiệu ứng nổi
-        display.drawRect(x - window_width / 2, y - window_height / 2, window_width, window_height, TFT_WHITE);
+        // === Cabin (khoang lái) ===
+        display.fillEllipse(x, y - 5, 5, 8, TFT_BLACK); // hình elip đen ở gần đầu xe
 
-        // Bánh xe: hình tròn với viền xám
-        int wheel_radius = 4; // Bán kính bánh xe
+        // === Mũi xe nhọn (tam giác nhỏ phía trước) === fillTriangle(x1, y1, x2, y2, x3, y3, color);
+
+        display.fillTriangle(x - 4, y - body_height / 2,x + 4, y - body_height / 2,x,y - body_height / 2 - 6,color);
+
+        // === Cánh gió trước (ngang đầu xe) === fillRect(x, y, width, height, color);
+        display.fillRect(x - 12, y - body_height / 2 - 2, 24, 2, TFT_DARKGREY);
+
+        // === Cánh gió sau (ngang đuôi xe) ===
+        display.fillRect(x - 14, y + body_height / 2, 28, 3, TFT_DARKGREY);
+
+        // === Bánh xe ===
+        int wheel_radius = 4; //bán kính bánh xe
+
         // Bánh trước trái
-        display.fillCircle(x - CAR_WIDTH / 2 + 4, y + CAR_HEIGHT / 2 - wheel_radius - 2, wheel_radius, TFT_BLACK);
-        display.drawCircle(x - CAR_WIDTH / 2 + 4, y + CAR_HEIGHT / 2 - wheel_radius - 2, wheel_radius, TFT_DARKGREY);
+        display.fillCircle(x - 10, y - body_height / 2 + 6, wheel_radius, TFT_BLACK);
         // Bánh trước phải
-        display.fillCircle(x + CAR_WIDTH / 2 - 4, y + CAR_HEIGHT / 2 - wheel_radius - 2, wheel_radius, TFT_BLACK);
-        display.drawCircle(x + CAR_WIDTH / 2 - 4, y + CAR_HEIGHT / 2 - wheel_radius - 2, wheel_radius, TFT_DARKGREY);
+        display.fillCircle(x + 10, y - body_height / 2 + 6, wheel_radius, TFT_BLACK);
         // Bánh sau trái
-        display.fillCircle(x - CAR_WIDTH / 2 + 4, y - CAR_HEIGHT / 2 + wheel_radius + 2, wheel_radius, TFT_BLACK);
-        display.drawCircle(x - CAR_WIDTH / 2 + 4, y - CAR_HEIGHT / 2 + wheel_radius + 2, wheel_radius, TFT_DARKGREY);
+        display.fillCircle(x - 10, y + body_height / 2 - 6, wheel_radius, TFT_BLACK);
         // Bánh sau phải
-        display.fillCircle(x + CAR_WIDTH / 2 - 4, y - CAR_HEIGHT / 2 + wheel_radius + 2, wheel_radius, TFT_BLACK);
-        display.drawCircle(x + CAR_WIDTH / 2 - 4, y - CAR_HEIGHT / 2 + wheel_radius + 2, wheel_radius, TFT_DARKGREY);
+        display.fillCircle(x + 10, y + body_height / 2 - 6, wheel_radius, TFT_BLACK);
 
-        // Đèn pha: hai tam giác nhỏ phía trước
-        display.fillTriangle(
-            x - CAR_WIDTH / 2, y - CAR_HEIGHT / 2,
-            x - CAR_WIDTH / 2 + 4, y - CAR_HEIGHT / 2,
-            x - CAR_WIDTH / 2 + 2, y - CAR_HEIGHT / 2 - 4,
-            TFT_YELLOW
-        );
-        display.fillTriangle(
-            x + CAR_WIDTH / 2, y - CAR_HEIGHT / 2,
-            x + CAR_WIDTH / 2 - 4, y - CAR_HEIGHT / 2,
-            x + CAR_WIDTH / 2 - 2, y - CAR_HEIGHT / 2 - 4,
-            TFT_YELLOW
-        );
-
-        xSemaphoreGive(tftMutex); // Giải phóng semaphore
+        xSemaphoreGive(tftMutex);
     }
 }
 
-// Hàm xóa xe khỏi màn hình
 void delCar(int x, int y) {
-    if (xSemaphoreTake(tftMutex, portMAX_DELAY) == pdTRUE) { // Đợi semaphore
-        // Tăng kích thước vùng xóa để bao phủ toàn bộ xe
-        int clear_width = CAR_WIDTH + 8;  // Thêm padding để xóa viền và đèn pha
-        int clear_height = CAR_HEIGHT + 8; // Thêm padding để xóa bánh xe và chi tiết phía trên
+    if (xSemaphoreTake(tftMutex, portMAX_DELAY) == pdTRUE) {
+        // Kích thước xe F1 mở rộng hơn thân xe đơn giản
+        int clear_width = 36;  // Bao phủ cả thân, cánh gió và bánh
+        int clear_height = 52; // Bao phủ cả đầu xe nhọn và cánh sau
+        //Fill toàn bộ xe mầu nền để xóa xe
         display.fillRect(
-            x - clear_width / 2, 
-            y - clear_height / 2, 
-            clear_width, 
-            clear_height, 
-            ROAD_GRAY // Xóa bằng màu nền đường
+            x - clear_width / 2,
+            y - clear_height / 2,
+            clear_width,
+            clear_height,
+            ROAD_GRAY // Màu nền đường
         );
-        xSemaphoreGive(tftMutex); // Giải phóng semaphore
+        xSemaphoreGive(tftMutex);
     }
 }
 
@@ -170,7 +161,7 @@ bool runGameRacing() {
 
     // Kiểm tra va chạm
     for (int i = 0; i < ENEMY_COUNT; i++) {
-        if (car_x == enemy_x[i] && abs(car_y - enemy_y[i]) < CAR_HEIGHT) { // Nếu cùng lane và gần nhau
+        if (car_x == enemy_x[i] && abs(car_y - enemy_y[i]) <= CAR_HEIGHT) { // Nếu cùng lane và gần nhau
             gameOverRacing();        // Gọi hàm Game Over
             return true;             // Trả về true để tiếp tục vòng lặp
         }

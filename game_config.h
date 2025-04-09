@@ -40,20 +40,12 @@ enum Button {
 // Định nghĩa chân điều khiển đèn nền
 #define PIN_BACKLIGHT  4   // Chân GPIO cho đèn nền màn hình
 
-// Các thông số chung
-#define SCREEN_TIMEOUT 180000 // Thời gian tắt màn hình nếu không hoạt động (3 phút = 180000ms)
-
-// Định nghĩa màu sắc bổ sung (16-bit RGB)
-#define TFT_DARKRED   0x8000  // Màu đỏ đậm (R=128, G=0, B=0)
-#define TFT_DARKGREY  0x7BEF  // Màu xám đậm (R=128, G=128, B=128), định nghĩa lại cho rõ ràng
-
 // Khai báo các biến toàn cục (được định nghĩa ở file .cpp khác)
 extern TFT_eSPI display;                // Đối tượng màn hình TFT
 extern QueueHandle_t buttonQueue;       // Hàng đợi lưu trữ sự kiện nút bấm
 extern SemaphoreHandle_t tftMutex;      // Semaphore bảo vệ truy cập màn hình TFT
 extern SemaphoreHandle_t stateMutex;    // Semaphore bảo vệ trạng thái game
 extern SemaphoreHandle_t buttonMutex;   // Semaphore bảo vệ trạng thái nút bấm
-extern unsigned long lastActivityTime;  // Thời gian hoạt động cuối cùng
 
 extern bool buttonStates[NUM_BUTTONS];    // Mảng lưu trạng thái hiện tại của các nút
 extern bool lastButtonStates[NUM_BUTTONS]; // Mảng lưu trạng thái trước đó của các nút

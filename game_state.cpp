@@ -48,7 +48,7 @@ void drawMenu() {
             // Kiểm tra xem mục này có phải là mục được chọn không
             if (selectedGame == i) {
                 display.setTextSize(2);         // Đặt kích thước chữ là 2
-                display.print("> ");            // In ký hiệu ">" để đánh dấu mục được chọn
+                display.print(">> ");            // In ký hiệu ">>" để đánh dấu mục được chọn
                 display.setTextColor(TFT_WHITE); // Đặt lại màu chữ trắng
                 display.print(games[i]);        // In tên trò chơi
             } else {

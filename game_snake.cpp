@@ -56,7 +56,6 @@ void drawBackground() {
         display.fillScreen(TFT_BLACK);         // Đổ nền đen toàn màn hình
         display.drawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, TFT_WHITE); // Vẽ viền trắng bao quanh
         xSemaphoreGive(tftMutex);              // Giải phóng semaphore
-        Serial.println("Background drawn");    // Log
     } else {
         Serial.println("ERROR: Failed to take tftMutex in drawBackground!"); // Báo lỗi nếu không lấy được semaphore
     }
@@ -70,18 +69,35 @@ void drawInitialState() {
             drawSnake(snake[i].x, snake[i].y, i == 0); // Đầu rắn khi i = 0
         }
         drawFood(food.x, food.y); // Vẽ thức ăn
-        // Hiển thị điểm số
-        display.fillRect(SCREEN_WIDTH - 60, 10, 60, 20, TFT_BLACK); // Xóa vùng điểm cũ
-        display.setTextColor(TFT_WHITE); // Màu chữ trắng
-        display.setTextSize(1);          // Kích thước chữ nhỏ
-        display.setCursor(SCREEN_WIDTH - 60, 10); // Đặt con trỏ ở góc trên phải
-        display.print("Score: ");
-        display.println(score);
         xSemaphoreGive(tftMutex); // Giải phóng semaphore
         Serial.println("Initial state drawn");
     } else {
         Serial.println("ERROR: Failed to take tftMutex in drawInitialState!"); // Báo lỗi
     }
+}
+
+// Hàm tạo thức ăn ngẫu nhiên
+void spawnFood() {
+    bool valid = false;
+    int attempts = 0;
+    while (!valid && attempts < 100) { // Thử tối đa 100 lần
+        food.x = (esp_random() % (NUM_COLS - 2)) + 1; // Ngẫu nhiên trong lưới, trừ viền
+        food.y = (esp_random() % (NUM_ROWS - 2)) + 1;
+        valid = true;
+        for (int i = 0; i < snakeLength; i++) { // Kiểm tra trùng với rắn
+            if (snake[i].x == food.x && snake[i].y == food.y) {
+                valid = false;
+                break;
+            }
+        }
+        attempts++;
+    }
+    if (!valid) { // Nếu không tìm được vị trí hợp lệ
+        food.x = NUM_COLS - 2; // Đặt ở góc dưới phải
+        food.y = NUM_ROWS - 2;
+    }
+    Serial.printf("Food spawned at (%d, %d)\n", food.x, food.y); // Log
+    drawFood(food.x, food.y); // Vẽ thức ăn
 }
 
 // Hàm hiển thị màn hình Game Over
@@ -125,33 +141,9 @@ void displayGameOver() {
     }
 }
 
-// Hàm tạo thức ăn ngẫu nhiên
-void spawnFood() {
-    bool valid = false;
-    int attempts = 0;
-    while (!valid && attempts < 100) { // Thử tối đa 100 lần
-        food.x = (esp_random() % (NUM_COLS - 2)) + 1; // Ngẫu nhiên trong lưới, trừ viền
-        food.y = (esp_random() % (NUM_ROWS - 2)) + 1;
-        valid = true;
-        for (int i = 0; i < snakeLength; i++) { // Kiểm tra trùng với rắn
-            if (snake[i].x == food.x && snake[i].y == food.y) {
-                valid = false;
-                break;
-            }
-        }
-        attempts++;
-    }
-    if (!valid) { // Nếu không tìm được vị trí hợp lệ
-        food.x = NUM_COLS - 2; // Đặt ở góc dưới phải
-        food.y = NUM_ROWS - 2;
-    }
-    Serial.printf("Food spawned at (%d, %d)\n", food.x, food.y); // Log
-    drawFood(food.x, food.y); // Vẽ thức ăn
-}
-
 // Hàm kiểm tra va chạm
 bool checkCollision(Point p) {
-    for (int i = 1; i < snakeLength; i++) { // Kiểm tra va chạm với thân
+    for (int i = 1; i < snakeLength; i++) { // Kiểm tra va chạm với thân và đầu rắn (p.x, p.y)
         if (snake[i].x == p.x && snake[i].y == p.y) {
             Serial.println("Collision with body!");
             return true;
@@ -264,14 +256,13 @@ void runGameSnake() {
         for (int i = 1; i < snakeLength; i++) { // Vẽ lại thân
             drawSnake(snake[i].x, snake[i].y, false);
         }
-        if (xSemaphoreTake(tftMutex, pdMS_TO_TICKS(500)) == pdTRUE) { // Đợi semaphore
-            display.fillRect(SCREEN_WIDTH - 60, 10, 60, 20, TFT_BLACK); // Xóa điểm cũ
-            display.setTextColor(TFT_WHITE);
-            display.setTextSize(1);
-            display.setCursor(SCREEN_WIDTH - 60, 10);
+        if (xSemaphoreTake(tftMutex, portMAX_DELAY) == pdTRUE) { // Đợi semaphore
+            display.setTextColor(TFT_WHITE,TFT_BLACK);           // Màu chữ trắng
+            display.setTextSize(2);                    // Kích thước chữ lớn hơn
+            display.setCursor(10, 10);                 // Đặt con trỏ ở góc trên trái (cách lề trái 10px)
             display.print("Score: ");
-            display.println(score);
-            xSemaphoreGive(tftMutex);
+            display.println(score);                    // In điểm số
+            xSemaphoreGive(tftMutex);                  // Giải phóng semaphore
             Serial.println("Screen updated");
         }
     }
