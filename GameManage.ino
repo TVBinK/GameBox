@@ -49,39 +49,62 @@ bool checkButton(Button btn) {
 
 // Xử lý sự kiện nhấn nút
 void processButtonPress(Button btn) {
-    if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) { // Đợi semaphore để thay đổi trạng thái
+    if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
         switch (currentState) {
-            case MENU: // Khi đang ở menu
-                if (btn == BTN_UP) { // Nút UP: Chuyển lên mục trước
+            case MENU:
+                if (btn == BTN_UP) {
                     selectedGame = (selectedGame > 0) ? selectedGame - 1 : NUM_GAMES - 1;
-                    menuNeedsRedraw = true; // Đánh dấu cần vẽ lại menu
-                } else if (btn == BTN_DOWN) { // Nút DOWN: Chuyển xuống mục sau
+                    menuNeedsRedraw = true;
+                } else if (btn == BTN_DOWN) {
                     selectedGame = (selectedGame + 1) % NUM_GAMES;
-                    menuNeedsRedraw = true; // Đánh dấu cần vẽ lại menu
-                } else if (btn == BTN_SELECT) { // Nút SELECT: Chọn trò chơi
+                    menuNeedsRedraw = true;
+                } else if (btn == BTN_SELECT) {
                     switch (selectedGame) {
-                        case 0: currentState = GAME1; break; // Snake
-                        case 1: currentState = GAME2; break; // Racing
+                        case 0: // Snake
+                            currentState = DIFFICULTY; // Chuyển sang màn hình độ khó
+                            difficultyNeedsRedraw = true;
+                            break;
+                        case 1: // Racing
+                            currentState = GAME2;
+                            menuActive = false;
+                            firstRun = true;
+                            break;
                     }
-                    menuActive = false; // Tắt menu
-                    firstRun = true;    // Đánh dấu lần chạy đầu tiên của game
-                    vTaskDelay(200 / portTICK_PERIOD_MS); // Trễ để tránh nhấn liên tục
+                    vTaskDelay(200 / portTICK_PERIOD_MS);
                 }
                 break;
-            case GAME1: // Khi đang chơi Snake
-            case GAME2: // Khi đang chơi Racing
-                if (btn == BTN_RETURN) { // Nút RETURN: Quay lại menu
+            case DIFFICULTY:
+                if (btn == BTN_UP) {
+                    selectedDifficulty = (selectedDifficulty > EASY) ? static_cast<Difficulty>(selectedDifficulty - 1) : HARD;
+                    difficultyNeedsRedraw = true;
+                } else if (btn == BTN_DOWN) {
+                    selectedDifficulty = (selectedDifficulty < HARD) ? static_cast<Difficulty>(selectedDifficulty + 1) : EASY;
+                    difficultyNeedsRedraw = true;
+                } else if (btn == BTN_SELECT) {
+                    currentState = GAME1; // Chuyển sang game Snake
+                    menuActive = false;
+                    firstRun = true;
+                    vTaskDelay(200 / portTICK_PERIOD_MS);
+                } else if (btn == BTN_RETURN) {
+                    currentState = MENU; // Quay lại menu
+                    menuNeedsRedraw = true;
+                    difficultyNeedsRedraw = false;
+                    vTaskDelay(200 / portTICK_PERIOD_MS);
+                }
+                break;
+            case GAME1:
+            case GAME2:
+                if (btn == BTN_RETURN) {
                     currentState = MENU;
                     menuNeedsRedraw = true;
-                    menuActive = true; // Bật menu
-                    vTaskDelay(200 / portTICK_PERIOD_MS); // Trễ để tránh nhấn liên tục
+                    menuActive = true;
+                    vTaskDelay(200 / portTICK_PERIOD_MS);
                 }
                 break;
         }
-        xSemaphoreGive(stateMutex); // Giải phóng semaphore
+        xSemaphoreGive(stateMutex);
     }
 }
-
 // Task xử lý đầu vào từ nút bấm
 void inputTask(void *parameter) {
     // Khởi tạo trạng thái ban đầu của các nút
@@ -127,33 +150,29 @@ int getPinForButton(Button btn) {
         default: return -1;                   // Trả về -1 nếu nút không hợp lệ
     }
 }
-
 // Task xử lý logic game
 void gameLogicTask(void *parameter) {
-    Button receivedButton; // Biến lưu nút nhận được từ hàng đợi
-
-    while (1) { // Vòng lặp vô hạn
-        if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) { // Đợi semaphore
-            GameState currentGameState = currentState; // Lấy trạng thái hiện tại
-            xSemaphoreGive(stateMutex); // Giải phóng semaphore
-
-            if (currentGameState == MENU) { // Nếu đang ở menu
-                handleMenu(); // Xử lý menu
-            } else { // Nếu đang chơi game
+    Button receivedButton;
+    while (1) {
+        if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
+            GameState currentGameState = currentState;
+            xSemaphoreGive(stateMutex);
+            if (currentGameState == MENU) {
+                handleMenu();
+            } else if (currentGameState == DIFFICULTY) {
+                handleDifficultyMenu(); // Xử lý màn hình độ khó
+            } else {
                 switch (currentGameState) {
-                    case GAME1: runGameSnake(); break; // Chạy game Snake
-                    case GAME2: runGameRacing(); break; // Chạy game Racing
+                    case GAME1: runGameSnake(); break;
+                    case GAME2: runGameRacing(); break;
                     default: break;
                 }
             }
         }
-
-        // Nhận sự kiện nút từ hàng đợi
         if (xQueueReceive(buttonQueue, &receivedButton, 0) == pdPASS) {
-            processButtonPress(receivedButton); // Xử lý nút nhấn
+            processButtonPress(receivedButton);
         }
-
-        vTaskDelay(50 / portTICK_PERIOD_MS); // Trễ 50ms để giảm tải CPU
+        vTaskDelay(50 / portTICK_PERIOD_MS);
     }
 }
 

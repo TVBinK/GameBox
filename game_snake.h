@@ -3,6 +3,7 @@
 
 #include <cstdint>      // Thư viện cung cấp các kiểu dữ liệu nguyên chuẩn (int, uint32_t, ...)
 #include "game_config.h" // Bao gồm tệp cấu hình game (chứa Button, TFT_eSPI, ...)
+#include "game_state.h"
 
 // Định nghĩa các hằng số cho game Snake
 #define SNAKE_MAX_LENGTH 100  // Độ dài tối đa của con rắn (100 ô)
@@ -36,6 +37,7 @@ extern bool hasDrawnBackground;         // Cờ kiểm tra xem nền đã đư�
 extern unsigned long lastMoveTime;      // Thời gian di chuyển cuối cùng của rắn
 extern int moveDelay;                   // Độ trễ giữa các lần di chuyển (ms)
 extern int maxSnake;                    // Điểm cao nhất của game Snake
+extern Difficulty currentDifficulty;    // Biến lưu độ khó hiện tại của game Snake
 
 // Khai báo các hàm cho game Snake
 void resetGame();          // Hàm đặt lại game về trạng thái ban đầu

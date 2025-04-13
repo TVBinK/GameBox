@@ -10,6 +10,53 @@ int selectedGame = 0;          // Chỉ số của trò chơi được chọn tr
 bool menuNeedsRedraw = true;   // Cờ để kiểm tra xem menu có cần vẽ lại hay không
 bool firstRun = true;          // Cờ để kiểm tra lần chạy đầu tiên
 bool gameOver = false;         // Cờ để kiểm tra trạng thái game over
+Difficulty selectedDifficulty = EASY; // Độ khó mặc định
+bool difficultyNeedsRedraw = true;   // Cờ để vẽ màn hình độ khó
+
+// Hàm vẽ màn hình chọn độ khó
+void drawDifficultyMenu() {
+    if (xSemaphoreTake(tftMutex, portMAX_DELAY) == pdTRUE) {
+        // Vẽ nền gradient
+        for (int i = 0; i < display.height(); i++) {
+            int color = display.color565(0, i / 2, 255 - i / 2);
+            display.drawFastHLine(0, i, display.width(), color);
+        }
+
+        // Vẽ tiêu đề "DIFFICULTY"
+        const char* title = "DIFFICULTY";
+        int titleWidth = strlen(title) * 18;
+        int titleX = (display.width() - titleWidth) / 2;
+        display.setTextColor(TFT_WHITE);
+        display.setTextSize(3);
+        display.setCursor(titleX, 20);
+        display.println(title);
+
+        // Danh sách mức độ khó
+        const char* difficulties[] = {
+            "Easy",
+            "Medium",
+            "Hard"
+        };
+
+        // Vẽ từng mức độ khó
+        for (int i = 0; i < 3; ++i) {
+            display.setCursor(30, 100 + i * 50);
+            if (selectedDifficulty == i) {
+                display.setTextSize(2);
+                display.print(">> ");
+                display.setTextColor(TFT_WHITE);
+                display.print(difficulties[i]);
+            } else {
+                display.setTextColor(TFT_WHITE);
+                display.setTextSize(2);
+                display.print("  ");
+                display.println(difficulties[i]);
+            }
+        }
+
+        xSemaphoreGive(tftMutex);
+    }
+}
 
 // Hàm vẽ giao diện menu lên màn hình
 void drawMenu() {
@@ -76,5 +123,14 @@ void handleMenu() {
     }
 
     // Tạm dừng 20ms để giảm tải CPU trong hệ thống nhúng
+    vTaskDelay(20 / portTICK_PERIOD_MS);
+}
+
+// Hàm xử lý logic màn hình độ khó
+void handleDifficultyMenu() {
+    if (difficultyNeedsRedraw) {
+        drawDifficultyMenu();
+        difficultyNeedsRedraw = false;
+    }
     vTaskDelay(20 / portTICK_PERIOD_MS);
 }

@@ -13,9 +13,11 @@ Point food;                            // Tọa độ của thức ăn
 int score = 0;                         // Điểm số ban đầu
 bool hasDrawnBackground = false;       // Cờ kiểm tra xem nền đã vẽ chưa
 unsigned long lastMoveTime = 0;        // Thời gian di chuyển cuối cùng
-int moveDelay = 200;                   // Độ trễ giữa các lần di chuyển (200ms)
+int moveDelay = 200;                   // Giá trị mặc định, sẽ được cập nhật theo độ khó
 int maxSnake = 0;                      // Điểm cao nhất của game Snake
 bool gameOverDrawn = false;            // Cờ kiểm soát việc vẽ màn hình Game Over
+Difficulty currentDifficulty = EASY; // Độ khó mặc định
+
 
 // Hàm vẽ một đoạn của rắn: đầu tròn có mắt, thân tròn nhỏ hơn
 void drawSnake(int x, int y, bool isHead) {
@@ -157,19 +159,26 @@ bool checkCollision(Point p) {
     return false;
 }
 
-// Hàm reset game về trạng thái ban đầu
+// Hàm reset game
 void resetGame() {
-    snakeLength = 3; // Đặt độ dài ban đầu
-    snake[0] = {NUM_COLS / 2, NUM_ROWS / 2};     // Đầu rắn ở giữa
-    snake[1] = {NUM_COLS / 2 - 1, NUM_ROWS / 2}; // Thân 1
-    snake[2] = {NUM_COLS / 2 - 2, NUM_ROWS / 2}; // Thân 2
-    currentDir = RIGHT; // Hướng ban đầu: sang phải
-    score = 0;          // Đặt lại điểm
-    spawnFood();        // Tạo thức ăn mới
-    gameOver = false;   // Reset trạng thái game over
-    gameOverDrawn = false; // Reset cờ vẽ Game Over
-    hasDrawnBackground = false; // Đánh dấu cần vẽ lại nền
-    Serial.println("Game reset");
+    snakeLength = 3;
+    snake[0] = {NUM_COLS / 2, NUM_ROWS / 2};
+    snake[1] = {NUM_COLS / 2 - 1, NUM_ROWS / 2};
+    snake[2] = {NUM_COLS / 2 - 2, NUM_ROWS / 2};
+    currentDir = RIGHT;
+    score = 0;
+    spawnFood();
+    gameOver = false;
+    gameOverDrawn = false;
+    hasDrawnBackground = false;
+    // Đặt moveDelay dựa trên độ khó
+    switch (selectedDifficulty) {
+        case EASY: moveDelay = 300; break; // Chậm
+        case MEDIUM: moveDelay = 200; break; // Trung bình
+        case HARD: moveDelay = 100; break; // Nhanh
+    }
+    currentDifficulty = selectedDifficulty; // Lưu độ khó
+    Serial.println("Game reset with difficulty: " + String(currentDifficulty));
 }
 
 // Hàm chạy logic chính của game Snake

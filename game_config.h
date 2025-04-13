@@ -13,6 +13,7 @@ enum GameState {
     MENU = 0,  // Trạng thái menu chính (0)
     GAME1,     // Trạng thái chơi game Snake (1)
     GAME2,     // Trạng thái chơi game Racing (2)
+    DIFFICULTY
 };
 
 // Định nghĩa các nút bấm trong enum Button
