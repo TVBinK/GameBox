@@ -16,9 +16,9 @@ int maxSnake = 0;
 int maxRacing = 0;
 int playCount = 0;
 unsigned long longestSurvivalTime = 0;
-int highScoresEasy[5] = {0, 0, 0, 0, 0};    // Khởi tạo điểm cao cho Easy
-int highScoresMedium[5] = {0, 0, 0, 0, 0};  // Khởi tạo điểm cao cho Medium
-int highScoresHard[5] = {0, 0, 0, 0, 0};    // Khởi tạo điểm cao cho Hard
+int highScoresEasy[5] = {0, 0, 0, 0, 0};
+int highScoresMedium[5] = {0, 0, 0, 0, 0};
+int highScoresHard[5] = {0, 0, 0, 0, 0};
 
 // Hàm vẽ màn hình chọn độ khó
 void drawDifficultyMenu() {
