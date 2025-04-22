@@ -62,30 +62,8 @@ void processButtonPress(Button btn) {
                             difficultyNeedsRedraw = true;
                             break;
                         case 1: // Racing
-                            currentState = GAME2;
-                            menuActive = false;
-                            firstRun = true;
-                            if (snakeUpdateTaskHandle != NULL) {
-                                vTaskSuspend(snakeUpdateTaskHandle);
-                            }
-                            if (snakeRenderTaskHandle != NULL) {
-                                vTaskSuspend(snakeRenderTaskHandle);
-                            }
-                            for (int i = 0; i < 3; i++) {
-                                if (xSemaphoreTake(tftMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-                                    display.fillScreen(TFT_BLACK);
-                                    xSemaphoreGive(tftMutex);
-                                    Serial.println("Screen cleared for GAME2, attempt " + String(i + 1));
-                                    break;
-                                }
-                                vTaskDelay(10 / portTICK_PERIOD_MS);
-                            }
-                            if (snakeUpdateTaskHandle != NULL) {
-                                vTaskResume(snakeUpdateTaskHandle);
-                            }
-                            if (snakeRenderTaskHandle != NULL) {
-                                vTaskResume(snakeRenderTaskHandle);
-                            }
+                            currentState = DIFFICULTY;
+                            difficultyNeedsRedraw = true;
                             break;
                     }
                     vTaskDelay(50 / portTICK_PERIOD_MS);
@@ -99,33 +77,61 @@ void processButtonPress(Button btn) {
                     selectedDifficulty = (selectedDifficulty < HARD) ? static_cast<Difficulty>(selectedDifficulty + 1) : EASY;
                     difficultyNeedsRedraw = true;
                 } else if (btn == BTN_SELECT) {
-                    currentState = GAME1;
-                    menuActive = false;
-                    firstRun = true;
-                    difficultyNeedsRedraw = false;
-                    if (snakeUpdateTaskHandle != NULL) {
-                        vTaskSuspend(snakeUpdateTaskHandle);
-                    }
-                    if (snakeRenderTaskHandle != NULL) {
-                        vTaskSuspend(snakeRenderTaskHandle);
-                    }
-                    for (int i = 0; i < 3; i++) {
-                        if (xSemaphoreTake(tftMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-                            display.fillScreen(TFT_BLACK);
-                            display.fillScreen(TFT_BLACK); // Gọi lần thứ hai để đảm bảo
-                            xSemaphoreGive(tftMutex);
-                            Serial.println("Screen cleared for GAME1, attempt " + String(i + 1));
-                            break;
+                    if (selectedGame == 0) { // Snake
+                        currentState = GAME1;
+                        menuActive = false;
+                        firstRun = true;
+                        difficultyNeedsRedraw = false;
+                        if (snakeUpdateTaskHandle != NULL) {
+                            vTaskSuspend(snakeUpdateTaskHandle);
                         }
-                        vTaskDelay(10 / portTICK_PERIOD_MS);
-                    }
-                    xTaskCreatePinnedToCore(snakeUpdateTask, "Snake Update Task", 8192, NULL, 2, &snakeUpdateTaskHandle, 1);
-                    xTaskCreatePinnedToCore(snakeRenderTask, "Snake Render Task", 12288, NULL, 4, &snakeRenderTaskHandle, 1);
-                    if (snakeUpdateTaskHandle != NULL) {
-                        vTaskResume(snakeUpdateTaskHandle);
-                    }
-                    if (snakeRenderTaskHandle != NULL) {
-                        vTaskResume(snakeRenderTaskHandle);
+                        if (snakeRenderTaskHandle != NULL) {
+                            vTaskSuspend(snakeRenderTaskHandle);
+                        }
+                        for (int i = 0; i < 3; i++) {
+                            if (xSemaphoreTake(tftMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+                                display.fillScreen(TFT_BLACK);
+                                display.fillScreen(TFT_BLACK);
+                                xSemaphoreGive(tftMutex);
+                                Serial.println("Screen cleared for GAME1, attempt " + String(i + 1));
+                                break;
+                            }
+                            vTaskDelay(10 / portTICK_PERIOD_MS);
+                        }
+                        xTaskCreatePinnedToCore(snakeUpdateTask, "Snake Update Task", 8192, NULL, 2, &snakeUpdateTaskHandle, 1);
+                        xTaskCreatePinnedToCore(snakeRenderTask, "Snake Render Task", 12288, NULL, 4, &snakeRenderTaskHandle, 1);
+                        if (snakeUpdateTaskHandle != NULL) {
+                            vTaskResume(snakeUpdateTaskHandle);
+                        }
+                        if (snakeRenderTaskHandle != NULL) {
+                            vTaskResume(snakeRenderTaskHandle);
+                        }
+                    } else if (selectedGame == 1) { // Racing
+                        currentState = GAME2;
+                        menuActive = false;
+                        firstRun = true;
+                        difficultyNeedsRedraw = false;
+                        if (snakeUpdateTaskHandle != NULL) {
+                            vTaskSuspend(snakeUpdateTaskHandle);
+                        }
+                        if (snakeRenderTaskHandle != NULL) {
+                            vTaskSuspend(snakeRenderTaskHandle);
+                        }
+                        for (int i = 0; i < 3; i++) {
+                            if (xSemaphoreTake(tftMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+                                display.fillScreen(TFT_BLACK);
+                                xSemaphoreGive(tftMutex);
+                                Serial.println("Screen cleared for GAME2, attempt " + String(i + 1));
+                                break;
+                            }
+                            vTaskDelay(10 / portTICK_PERIOD_MS);
+                        }
+                        if (snakeUpdateTaskHandle != NULL) {
+                            vTaskResume(snakeUpdateTaskHandle);
+                        }
+                        if (snakeRenderTaskHandle != NULL) {
+                            vTaskResume(snakeRenderTaskHandle);
+                        }
                     }
                     vTaskDelay(50 / portTICK_PERIOD_MS);
                 } else if (btn == BTN_RETURN) {
@@ -171,19 +177,25 @@ void processButtonPress(Button btn) {
 }
 
 void inputTask(void *parameter) {
+    static unsigned long lastPressTime[NUM_BUTTONS] = {0}; // Thời gian nhấn nút cuối cùng
+    const unsigned long debounceDelay = 50; // Tăng thời gian debounce lên 50ms
+
     for (int i = 0; i < NUM_BUTTONS; i++) {
         lastButtonStates[i] = digitalRead(getPinForButton(static_cast<Button>(i))) == LOW;
         buttonStates[i] = lastButtonStates[i];
     }
     while (1) {
         if (xSemaphoreTake(buttonMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            unsigned long currentTime = millis();
             for (int i = 0; i < NUM_BUTTONS; i++) {
                 bool current = digitalRead(getPinForButton(static_cast<Button>(i))) == LOW;
-                if (current && !lastButtonStates[i]) {
-                    vTaskDelay(20 / portTICK_PERIOD_MS);
+                if (current && !lastButtonStates[i] && (currentTime - lastPressTime[i] >= debounceDelay)) {
+                    vTaskDelay(debounceDelay / portTICK_PERIOD_MS); // Chờ debounce
                     if (digitalRead(getPinForButton(static_cast<Button>(i))) == LOW) {
                         Button btn = static_cast<Button>(i);
                         xQueueSend(buttonQueue, &btn, 0);
+                        lastPressTime[i] = currentTime; // Cập nhật thời gian nhấn
+                        Serial.print("Button pressed: "); Serial.println(i);
                     }
                 }
                 lastButtonStates[i] = current;
@@ -272,7 +284,3 @@ void loop() {
     vTaskDelay(500 / portTICK_PERIOD_MS);
     Serial.println(currentState);
 }
-
-
-
-

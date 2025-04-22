@@ -36,18 +36,6 @@ enum UpdateType {
     UPDATE_GAME_OVER
 };
 
-struct Point {
-    int x;
-    int y;
-};
-
-struct Obstacle {
-    Point points[8];
-    int length;
-    bool isMoving;
-    int direction;
-};
-
 struct UpdateData {
     UpdateType type;
     int snakeLength;
@@ -62,8 +50,8 @@ extern Direction currentDir;
 extern Point snake[SNAKE_MAX_LENGTH];
 extern int snakeLength;
 extern Point food;
-extern Point oldFood; // Biến mới để lưu vị trí thức ăn cũ
-extern bool needClearOldFood; // Biến cờ để đánh dấu cần xóa thức ăn cũ
+extern Point oldFood;
+extern bool needClearOldFood;
 extern FoodType foodType;
 extern unsigned long foodSpawnTime;
 extern unsigned long foodTimeout;
@@ -86,23 +74,23 @@ extern int highScoresMedium[5];
 extern int highScoresHard[5];
 extern TaskHandle_t gameTaskHandle;
 extern TaskHandle_t inputTaskHandle;
-extern unsigned long lastScoreUpdate; // Thời gian cập nhật điểm số cuối
-extern bool gameOverScreenActive; // Biến mới để kiểm soát màn hình Game Over
+extern unsigned long lastScoreUpdate;
+extern bool gameOverScreenActive;
 
 void resetGame();
 void runGameSnake();
 void snakeUpdateTask(void *parameter);
 void snakeRenderTask(void *parameter);
 void drawBackground();
-void drawBorder(); // Hàm vẽ viền
-void drawScoreArea(); // Hàm vẽ khu vực bảo vệ điểm số
+void drawBorder();
+void drawScoreArea();
 void drawInitialState();
 void displayGameOver();
 void spawnFood();
 bool checkCollision(Point p);
 void drawSnake(int x, int y, bool isHead);
 void drawFood(int x, int y);
-void clearFoodArea(int x, int y); // Hàm để xóa một vùng lớn hơn cho thức ăn
+void clearFoodArea(int x, int y);
 void drawObstacles();
 void updateObstacles();
 void initObstacles();

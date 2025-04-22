@@ -19,6 +19,12 @@ unsigned long longestSurvivalTime = 0;
 int highScoresEasy[5] = {0, 0, 0, 0, 0};
 int highScoresMedium[5] = {0, 0, 0, 0, 0};
 int highScoresHard[5] = {0, 0, 0, 0, 0};
+int racingHighScoresEasy[5] = {0, 0, 0, 0, 0};
+int racingHighScoresMedium[5] = {0, 0, 0, 0, 0};
+int racingHighScoresHard[5] = {0, 0, 0, 0, 0};
+int racingPlayCount = 0;
+unsigned long racingLongestSurvivalTime = 0;
+int racingCurrentRank = -1;
 
 // Hàm vẽ màn hình chọn độ khó
 void drawDifficultyMenu() {
