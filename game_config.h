@@ -47,11 +47,11 @@ struct Obstacle {
 #define NUM_BUTTONS 6
 
 // Định nghĩa các chân GPIO cho nút bấm
-#define BTN_UP_PIN     26
-#define BTN_DOWN_PIN   25
-#define BTN_LEFT_PIN   32
-#define BTN_RIGHT_PIN  33
-#define BTN_SELECT_PIN 27
+#define BTN_UP_PIN     25
+#define BTN_DOWN_PIN   13
+#define BTN_LEFT_PIN   33
+#define BTN_RIGHT_PIN  12
+#define BTN_SELECT_PIN 32
 #define BTN_RETURN_PIN 14
 
 // Định nghĩa chân điều khiển đèn nền
