@@ -1,3 +1,4 @@
+// Bao gồm các thư viện cần thiết cho giao tiếp SPI, màn hình TFT, và hệ điều hành FreeRTOS
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include "freertos/FreeRTOS.h"
@@ -9,53 +10,102 @@
 #include "game_racing.h"
 #include "game_snake.h"
 
+// Khởi tạo đối tượng màn hình TFT
 TFT_eSPI display = TFT_eSPI();
 
-TaskHandle_t inputTaskHandle = NULL;
-TaskHandle_t gameTaskHandle = NULL;
-TaskHandle_t snakeUpdateTaskHandle = NULL;
-TaskHandle_t snakeRenderTaskHandle = NULL;
+// Khai báo các handle cho các task (luồng xử lý) của FreeRTOS
+TaskHandle_t inputTaskHandle = NULL;         // Task xử lý input từ nút bấm
+TaskHandle_t gameTaskHandle = NULL;         // Task xử lý logic game chính
+TaskHandle_t snakeUpdateTaskHandle = NULL;  // Task cập nhật logic game Snake
+TaskHandle_t snakeRenderTaskHandle = NULL;  // Task vẽ giao diện game Snake
+TaskHandle_t racingUpdateTaskHandle = NULL; // Task cập nhật logic game Racing
+TaskHandle_t racingRenderTaskHandle = NULL; // Task vẽ giao diện game Racing
 
-QueueHandle_t buttonQueue;
-QueueHandle_t snakeUpdateQueue;
+// Khai báo các hàng đợi (queue) để giao tiếp giữa các task
+QueueHandle_t buttonQueue;        // Hàng đợi lưu sự kiện nhấn nút
+QueueHandle_t snakeUpdateQueue;   // Hàng đợi cập nhật dữ liệu game Snake
+QueueHandle_t racingUpdateQueue;  // Hàng đợi cập nhật dữ liệu game Racing
 
-SemaphoreHandle_t tftMutex;
-SemaphoreHandle_t stateMutex;
-SemaphoreHandle_t buttonMutex;
+// Khai báo các semaphore (cơ chế khóa) để quản lý truy cập đồng thời
+SemaphoreHandle_t tftMutex;       // Khóa bảo vệ truy cập màn hình TFT
+SemaphoreHandle_t stateMutex;     // Khóa bảo vệ trạng thái game
+SemaphoreHandle_t buttonMutex;    // Khóa bảo vệ trạng thái nút bấm
 
-bool buttonStates[NUM_BUTTONS] = {false};
-bool lastButtonStates[NUM_BUTTONS] = {false};
+// Mảng lưu trạng thái hiện tại và trạng thái trước đó của các nút bấm
+bool buttonStates[NUM_BUTTONS] = {false};    // Trạng thái hiện tại
+bool lastButtonStates[NUM_BUTTONS] = {false}; // Trạng thái trước đó
 
-extern GameState currentState;
-extern int selectedGame;
-extern bool menuNeedsRedraw;
-extern bool firstRun;
-extern bool difficultyNeedsRedraw;
+// Các biến toàn cục được khai báo ở file khác
+extern GameState currentState;    // Trạng thái hiện tại của game (MENU, GAME1, GAME2, DIFFICULTY)
+extern int selectedGame;          // Game được chọn (0: Snake, 1: Racing)
+extern bool menuNeedsRedraw;      // Cờ báo cần vẽ lại menu
+extern bool firstRun;             // Cờ báo lần chạy đầu tiên
+extern bool difficultyNeedsRedraw;// Cờ báo cần vẽ lại menu chọn độ khó
 
-bool menuActive = true;
-unsigned long lastStateChange = 0;
-const unsigned long STATE_CHANGE_DELAY = 1000;
+// Biến quản lý trạng thái menu và thời gian chuyển trạng thái
+bool menuActive = true;                       // Menu đang hoạt động
+unsigned long lastStateChange = 0;           // Thời gian thay đổi trạng thái cuối
+const unsigned long STATE_CHANGE_DELAY = 1000;// Độ trễ tối thiểu giữa các thay đổi trạng thái (ms)
 
+// Hàm kiểm tra trạng thái nút bấm với khóa bảo vệ
 bool checkButton(Button btn) {
+    // Lấy khóa buttonMutex với thời gian chờ tối đa 50ms
     if (xSemaphoreTake(buttonMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-        bool state = buttonStates[btn];
-        xSemaphoreGive(buttonMutex);
+        bool state = buttonStates[btn]; // Lấy trạng thái nút
+        xSemaphoreGive(buttonMutex);    // Giải phóng khóa
         return state;
     }
-    return false;
+    return false; // Trả về false nếu không lấy được khóa
 }
 
+// Hàm xóa màn hình nhanh, đảm bảo không để lại hiện tượng nhấp nháy
+void fastClearScreen() {
+    // Thử lấy khóa tftMutex với thời gian chờ 200ms
+    if (xSemaphoreTake(tftMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+        display.fillScreen(TFT_BLACK); // Xóa màn hình bằng màu đen
+        display.fillScreen(TFT_BLACK); // Xóa lần thứ hai để tránh hiện tượng nhấp nháy
+        xSemaphoreGive(tftMutex);      // Giải phóng khóa
+        Serial.println("Screen cleared rapidly for game transition");
+    } else {
+        // Nếu không lấy được khóa, thử khôi phục
+        Serial.println("WARNING: Failed to acquire tftMutex for screen clear, attempting recovery");
+        vTaskDelay(50 / portTICK_PERIOD_MS); // Chờ 50ms
+        if (xSemaphoreTake(tftMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+            display.fillScreen(TFT_BLACK); // Xóa màn hình
+            display.fillScreen(TFT_BLACK);
+            xSemaphoreGive(tftMutex);
+            Serial.println("Emergency screen clear successful");
+        } else {
+            // Nếu vẫn thất bại, xóa và tạo lại khóa
+            vSemaphoreDelete(tftMutex); // Xóa khóa cũ
+            tftMutex = xSemaphoreCreateMutex(); // Tạo khóa mới
+            if (tftMutex != NULL && xSemaphoreTake(tftMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+                display.fillScreen(TFT_BLACK);
+                xSemaphoreGive(tftMutex);
+                Serial.println("Screen cleared after mutex reset");
+            } else {
+                Serial.println("CRITICAL: Failed to clear screen");
+            }
+        }
+    }
+}
+
+// Hàm xử lý sự kiện nhấn nút
 void processButtonPress(Button btn) {
+    // Lấy khóa trạng thái game
     if (xSemaphoreTake(stateMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
         switch (currentState) {
-            case MENU:
+            case MENU: // Xử lý trong menu chính
                 if (btn == BTN_UP) {
+                    // Chuyển lên game trước đó
                     selectedGame = (selectedGame > 0) ? selectedGame - 1 : NUM_GAMES - 1;
-                    menuNeedsRedraw = true;
+                    menuNeedsRedraw = true; // Đánh dấu cần vẽ lại menu
                 } else if (btn == BTN_DOWN) {
+                    // Chuyển xuống game tiếp theo
                     selectedGame = (selectedGame + 1) % NUM_GAMES;
                     menuNeedsRedraw = true;
                 } else if (btn == BTN_SELECT) {
+                    // Chọn game và chuyển sang màn hình chọn độ khó
                     switch (selectedGame) {
                         case 0: // Snake
                             currentState = DIFFICULTY;
@@ -66,88 +116,117 @@ void processButtonPress(Button btn) {
                             difficultyNeedsRedraw = true;
                             break;
                     }
-                    vTaskDelay(50 / portTICK_PERIOD_MS);
+                    vTaskDelay(50 / portTICK_PERIOD_MS); // Chờ 50ms để ổn định
                 }
                 break;
-            case DIFFICULTY:
+            case DIFFICULTY: // Xử lý trong menu chọn độ khó
                 if (btn == BTN_UP) {
+                    // Chuyển lên độ khó trước
                     selectedDifficulty = (selectedDifficulty > EASY) ? static_cast<Difficulty>(selectedDifficulty - 1) : HARD;
                     difficultyNeedsRedraw = true;
                 } else if (btn == BTN_DOWN) {
+                    // Chuyển xuống độ khó sau
                     selectedDifficulty = (selectedDifficulty < HARD) ? static_cast<Difficulty>(selectedDifficulty + 1) : EASY;
                     difficultyNeedsRedraw = true;
                 } else if (btn == BTN_SELECT) {
-                    if (selectedGame == 0) { // Snake
+                    // Tạm dừng tất cả task game để tránh xung đột khi chuyển game
+                    if (snakeUpdateTaskHandle != NULL) vTaskSuspend(snakeUpdateTaskHandle);
+                    if (snakeRenderTaskHandle != NULL) vTaskSuspend(snakeRenderTaskHandle);
+                    if (racingUpdateTaskHandle != NULL) vTaskSuspend(racingUpdateTaskHandle);
+                    if (racingRenderTaskHandle != NULL) vTaskSuspend(racingRenderTaskHandle);
+
+                    // Xóa màn hình trước khi bắt đầu game mới
+                    fastClearScreen();
+
+                    if (selectedGame == 0) { // Khởi động game Snake
                         currentState = GAME1;
                         menuActive = false;
                         firstRun = true;
                         difficultyNeedsRedraw = false;
-                        if (snakeUpdateTaskHandle != NULL) {
-                            vTaskSuspend(snakeUpdateTaskHandle);
+
+                        // Xóa task Racing nếu tồn tại
+                        if (racingUpdateTaskHandle != NULL) {
+                            vTaskDelete(racingUpdateTaskHandle);
+                            racingUpdateTaskHandle = NULL;
                         }
-                        if (snakeRenderTaskHandle != NULL) {
-                            vTaskSuspend(snakeRenderTaskHandle);
+                        if (racingRenderTaskHandle != NULL) {
+                            vTaskDelete(racingRenderTaskHandle);
+                            racingRenderTaskHandle = NULL;
                         }
-                        for (int i = 0; i < 3; i++) {
-                            if (xSemaphoreTake(tftMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-                                display.fillScreen(TFT_BLACK);
-                                display.fillScreen(TFT_BLACK);
-                                xSemaphoreGive(tftMutex);
-                                Serial.println("Screen cleared for GAME1, attempt " + String(i + 1));
-                                break;
-                            }
-                            vTaskDelay(10 / portTICK_PERIOD_MS);
+
+                        // Đặt lại hàng đợi
+                        if (snakeUpdateQueue != NULL) xQueueReset(snakeUpdateQueue);
+                        if (racingUpdateQueue != NULL) xQueueReset(racingUpdateQueue);
+
+                        // Tạo hoặc khôi phục task Snake
+                        if (snakeUpdateTaskHandle == NULL) {
+                            xTaskCreatePinnedToCore(snakeUpdateTask, "Snake Update Task", 8192, NULL, 2, &snakeUpdateTaskHandle, 1);
                         }
-                        xTaskCreatePinnedToCore(snakeUpdateTask, "Snake Update Task", 8192, NULL, 2, &snakeUpdateTaskHandle, 1);
-                        xTaskCreatePinnedToCore(snakeRenderTask, "Snake Render Task", 12288, NULL, 4, &snakeRenderTaskHandle, 1);
-                        if (snakeUpdateTaskHandle != NULL) {
-                            vTaskResume(snakeUpdateTaskHandle);
+                        if (snakeRenderTaskHandle == NULL) {
+                            xTaskCreatePinnedToCore(snakeRenderTask, "Snake Render Task", 12288, NULL, 4, &snakeRenderTaskHandle, 1);
                         }
-                        if (snakeRenderTaskHandle != NULL) {
-                            vTaskResume(snakeRenderTaskHandle);
-                        }
-                    } else if (selectedGame == 1) { // Racing
+                        vTaskResume(snakeUpdateTaskHandle);
+                        vTaskResume(snakeRenderTaskHandle);
+                        Serial.println("Snake game initialized with clean screen");
+                    } else if (selectedGame == 1) { // Khởi động game Racing
                         currentState = GAME2;
                         menuActive = false;
                         firstRun = true;
                         difficultyNeedsRedraw = false;
+
+                        // Xóa task Snake nếu tồn tại
                         if (snakeUpdateTaskHandle != NULL) {
-                            vTaskSuspend(snakeUpdateTaskHandle);
+                            vTaskDelete(snakeUpdateTaskHandle);
+                            snakeUpdateTaskHandle = NULL;
                         }
                         if (snakeRenderTaskHandle != NULL) {
-                            vTaskSuspend(snakeRenderTaskHandle);
+                            vTaskDelete(snakeRenderTaskHandle);
+                            snakeRenderTaskHandle = NULL;
                         }
-                        for (int i = 0; i < 3; i++) {
-                            if (xSemaphoreTake(tftMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-                                display.fillScreen(TFT_BLACK);
-                                xSemaphoreGive(tftMutex);
-                                Serial.println("Screen cleared for GAME2, attempt " + String(i + 1));
-                                break;
-                            }
-                            vTaskDelay(10 / portTICK_PERIOD_MS);
+
+                        // Đặt lại hàng đợi
+                        if (snakeUpdateQueue != NULL) xQueueReset(snakeUpdateQueue);
+                        if (racingUpdateQueue != NULL) xQueueReset(racingUpdateQueue);
+
+                        // Tạo hoặc khôi phục task Racing
+                        if (racingUpdateTaskHandle == NULL) {
+                            xTaskCreatePinnedToCore(racingUpdateTask, "Racing Update Task", 8192, NULL, 2, &racingUpdateTaskHandle, 1);
                         }
-                        if (snakeUpdateTaskHandle != NULL) {
-                            vTaskResume(snakeUpdateTaskHandle);
+                        if (racingRenderTaskHandle == NULL) {
+                            xTaskCreatePinnedToCore(racingRenderTask, "Racing Render Task", 12288, NULL, 4, &racingRenderTaskHandle, 1);
                         }
-                        if (snakeRenderTaskHandle != NULL) {
-                            vTaskResume(snakeRenderTaskHandle);
-                        }
+                        vTaskResume(racingUpdateTaskHandle);
+                        vTaskResume(racingRenderTaskHandle);
+                        Serial.println("Racing game initialized with clean screen");
                     }
-                    vTaskDelay(50 / portTICK_PERIOD_MS);
                 } else if (btn == BTN_RETURN) {
+                    // Quay lại menu chính
                     currentState = MENU;
                     menuNeedsRedraw = true;
                     difficultyNeedsRedraw = false;
+                    fastClearScreen();
                     vTaskDelay(50 / portTICK_PERIOD_MS);
                 }
                 break;
-            case GAME1:
-            case GAME2:
+            case GAME1: // Trong game Snake
+            case GAME2: // Trong game Racing
                 if (btn == BTN_RETURN) {
+                    // Tạm dừng tất cả task game
+                    if (snakeUpdateTaskHandle != NULL) vTaskSuspend(snakeUpdateTaskHandle);
+                    if (snakeRenderTaskHandle != NULL) vTaskSuspend(snakeRenderTaskHandle);
+                    if (racingUpdateTaskHandle != NULL) vTaskSuspend(racingUpdateTaskHandle);
+                    if (racingRenderTaskHandle != NULL) vTaskSuspend(racingRenderTaskHandle);
+
+                    // Xóa màn hình
+                    fastClearScreen();
+
+                    // Chuyển về menu
                     currentState = MENU;
                     menuNeedsRedraw = true;
                     menuActive = true;
                     difficultyNeedsRedraw = false;
+
+                    // Xóa task tương ứng
                     if (currentState == GAME1) {
                         if (snakeUpdateTaskHandle != NULL) {
                             vTaskDelete(snakeUpdateTaskHandle);
@@ -157,56 +236,66 @@ void processButtonPress(Button btn) {
                             vTaskDelete(snakeRenderTaskHandle);
                             snakeRenderTaskHandle = NULL;
                         }
-                    }
-                    for (int i = 0; i < 3; i++) {
-                        if (xSemaphoreTake(tftMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-                            display.fillScreen(TFT_BLACK);
-                            display.fillScreen(TFT_BLACK);
-                            xSemaphoreGive(tftMutex);
-                            Serial.println("Screen cleared for MENU, attempt " + String(i + 1));
-                            break;
+                    } else if (currentState == GAME2) {
+                        if (racingUpdateTaskHandle != NULL) {
+                            vTaskDelete(racingUpdateTaskHandle);
+                            racingUpdateTaskHandle = NULL;
                         }
-                        vTaskDelay(10 / portTICK_PERIOD_MS);
+                        if (racingRenderTaskHandle != NULL) {
+                            vTaskDelete(racingRenderTaskHandle);
+                            racingRenderTaskHandle = NULL;
+                        }
                     }
+
+                    // Đặt lại hàng đợi
+                    if (snakeUpdateQueue != NULL) xQueueReset(snakeUpdateQueue);
+                    if (racingUpdateQueue != NULL) xQueueReset(racingUpdateQueue);
+
+                    Serial.println("Returned to menu with clean screen");
                     vTaskDelay(50 / portTICK_PERIOD_MS);
                 }
                 break;
         }
-        xSemaphoreGive(stateMutex);
+        xSemaphoreGive(stateMutex); // Giải phóng khóa trạng thái
     }
 }
 
+// Task xử lý input từ nút bấm
 void inputTask(void *parameter) {
-    static unsigned long lastPressTime[NUM_BUTTONS] = {0}; // Thời gian nhấn nút cuối cùng
-    const unsigned long debounceDelay = 50; // Tăng thời gian debounce lên 50ms
+    static unsigned long lastPressTime[NUM_BUTTONS] = {0}; // Thời gian nhấn nút cuối
+    const unsigned long debounceDelay = 50;                // Độ trễ chống nhiễu (ms)
 
+    // Khởi tạo trạng thái ban đầu của các nút
     for (int i = 0; i < NUM_BUTTONS; i++) {
         lastButtonStates[i] = digitalRead(getPinForButton(static_cast<Button>(i))) == LOW;
         buttonStates[i] = lastButtonStates[i];
     }
     while (1) {
+        // Lấy khóa buttonMutex
         if (xSemaphoreTake(buttonMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             unsigned long currentTime = millis();
             for (int i = 0; i < NUM_BUTTONS; i++) {
                 bool current = digitalRead(getPinForButton(static_cast<Button>(i))) == LOW;
+                // Kiểm tra sự kiện nhấn nút (chuyển từ HIGH sang LOW)
                 if (current && !lastButtonStates[i] && (currentTime - lastPressTime[i] >= debounceDelay)) {
-                    vTaskDelay(debounceDelay / portTICK_PERIOD_MS); // Chờ debounce
+                    vTaskDelay(debounceDelay / portTICK_PERIOD_MS); // Chờ để chống nhiễu
                     if (digitalRead(getPinForButton(static_cast<Button>(i))) == LOW) {
                         Button btn = static_cast<Button>(i);
-                        xQueueSend(buttonQueue, &btn, 0);
-                        lastPressTime[i] = currentTime; // Cập nhật thời gian nhấn
+                        xQueueSend(buttonQueue, &btn, 0); // Gửi sự kiện vào hàng đợi
+                        lastPressTime[i] = currentTime;
                         Serial.print("Button pressed: "); Serial.println(i);
                     }
                 }
                 lastButtonStates[i] = current;
                 buttonStates[i] = current;
             }
-            xSemaphoreGive(buttonMutex);
+            xSemaphoreGive(buttonMutex); // Giải phóng khóa
         }
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+        vTaskDelay(10 / portTICK_PERIOD_MS); // Chờ 10ms
     }
 }
 
+// Hàm lấy chân GPIO tương ứng với nút bấm
 int getPinForButton(Button btn) {
     switch(btn) {
         case BTN_UP: return BTN_UP_PIN;
@@ -215,59 +304,71 @@ int getPinForButton(Button btn) {
         case BTN_RIGHT: return BTN_RIGHT_PIN;
         case BTN_SELECT: return BTN_SELECT_PIN;
         case BTN_RETURN: return BTN_RETURN_PIN;
-        default: return -1;
+        default: return -1; // Trả về -1 nếu nút không hợp lệ
     }
 }
 
+// Task xử lý logic chính của game
 void gameLogicTask(void *parameter) {
-    Button receivedButton;
+    Button receivedButton; // Biến lưu nút được nhận từ hàng đợi
     while (1) {
+        // Kiểm tra trạng thái game
         if (xSemaphoreTake(stateMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             GameState currentGameState = currentState;
             xSemaphoreGive(stateMutex);
+            // Xử lý theo trạng thái
             if (currentGameState == MENU) {
-                handleMenu();
+                handleMenu(); // Vẽ và xử lý menu
             } else if (currentGameState == DIFFICULTY) {
-                handleDifficultyMenu();
+                handleDifficultyMenu(); // Vẽ và xử lý menu độ khó
             } else {
                 switch (currentGameState) {
-                    case GAME1: runGameSnake(); break;
-                    case GAME2: runGameRacing(); break;
+                    case GAME1: runGameSnake(); break; // Chạy game Snake
+                    case GAME2: runGameRacing(); break; // Chạy game Racing
                     default: break;
                 }
             }
         }
+        // Nhận sự kiện nút bấm từ hàng đợi
         if (xQueueReceive(buttonQueue, &receivedButton, 0) == pdPASS) {
-            processButtonPress(receivedButton);
+            processButtonPress(receivedButton); // Xử lý nút được nhấn
         }
-        vTaskDelay(20 / portTICK_PERIOD_MS);
+        vTaskDelay(20 / portTICK_PERIOD_MS); // Chờ 20ms
     }
 }
 
+// Hàm khởi tạo chương trình
 void setup() {
-    Serial.begin(115200);
-    delay(500);
+    Serial.begin(115200); // Khởi tạo giao tiếp Serial
+    delay(500); // Chờ 500ms để ổn định
+    // Cấu hình các chân nút bấm với chế độ INPUT_PULLUP
     pinMode(BTN_UP_PIN, INPUT_PULLUP);
     pinMode(BTN_DOWN_PIN, INPUT_PULLUP);
     pinMode(BTN_LEFT_PIN, INPUT_PULLUP);
     pinMode(BTN_RIGHT_PIN, INPUT_PULLUP);
     pinMode(BTN_SELECT_PIN, INPUT_PULLUP);
     pinMode(BTN_RETURN_PIN, INPUT_PULLUP);
-    display.init();
-    display.setRotation(0);
-    display.fillScreen(TFT_BLACK);
-    pinMode(PIN_BACKLIGHT, OUTPUT);
-    digitalWrite(PIN_BACKLIGHT, HIGH);
+    display.init(); // Khởi tạo màn hình TFT
+    display.setRotation(0); // Cài đặt hướng màn hình
+    display.fillScreen(TFT_BLACK); // Xóa màn hình bằng màu đen
+    pinMode(PIN_BACKLIGHT, OUTPUT); // Cấu hình chân đèn nền
+    digitalWrite(PIN_BACKLIGHT, HIGH); // Bật đèn nền
+    // Tạo các hàng đợi
     buttonQueue = xQueueCreate(10, sizeof(Button));
     snakeUpdateQueue = xQueueCreate(20, sizeof(UpdateData));
+    racingUpdateQueue = xQueueCreate(20, sizeof(RacingUpdateData));
     Serial.println("snakeUpdateQueue created with size 20");
+    Serial.println("racingUpdateQueue created with size 20");
+    // Tạo các semaphore
     tftMutex = xSemaphoreCreateMutex();
     stateMutex = xSemaphoreCreateMutex();
     buttonMutex = xSemaphoreCreateMutex();
+    // Kiểm tra lỗi khi tạo tftMutex
     if (tftMutex == NULL) {
         Serial.println("ERROR: Failed to create tftMutex!");
         while (1);
     }
+    // Khởi tạo trạng thái ban đầu
     if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
         currentState = MENU;
         selectedGame = 0;
@@ -275,12 +376,14 @@ void setup() {
         firstRun = true;
         xSemaphoreGive(stateMutex);
     }
+    // Tạo task xử lý input và logic game
     xTaskCreatePinnedToCore(inputTask, "Input Task", 4096, NULL, 2, &inputTaskHandle, 0);
     vTaskDelay(50 / portTICK_PERIOD_MS);
     xTaskCreatePinnedToCore(gameLogicTask, "Game Logic Task", 8192, NULL, 1, &gameTaskHandle, 1);
 }
 
+// Vòng lặp chính (chỉ in trạng thái để debug)
 void loop() {
-    vTaskDelay(500 / portTICK_PERIOD_MS);
-    Serial.println(currentState);
+    vTaskDelay(500 / portTICK_PERIOD_MS); // Chờ 500ms
+    Serial.println(currentState); // In trạng thái hiện tại
 }

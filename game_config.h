@@ -1,6 +1,8 @@
+// Bảo vệ chống trùng lặp include
 #ifndef GAME_CONFIG_H
 #define GAME_CONFIG_H
 
+// Bao gồm các thư viện cần thiết
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include "freertos/FreeRTOS.h"
@@ -8,43 +10,43 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 
-// Định nghĩa các trạng thái game trong enum GameState
+// Định nghĩa các trạng thái game
 enum GameState {
-    MENU = 0,
-    GAME1,
-    GAME2,
-    DIFFICULTY
+    MENU = 0,   // Menu chính
+    GAME1,      // Game Snake
+    GAME2,      // Game Racing
+    DIFFICULTY  // Menu chọn độ khó
 };
 
-// Định nghĩa các nút bấm trong enum Button
+// Định nghĩa các nút bấm
 enum Button {
-    BTN_UP = 0,
-    BTN_DOWN = 1,
-    BTN_LEFT = 2,
-    BTN_RIGHT = 3,
-    BTN_SELECT = 4,
-    BTN_RETURN = 5
+    BTN_UP = 0,     // Nút lên
+    BTN_DOWN = 1,   // Nút xuống
+    BTN_LEFT = 2,   // Nút trái
+    BTN_RIGHT = 3,  // Nút phải
+    BTN_SELECT = 4, // Nút chọn
+    BTN_RETURN = 5  // Nút quay lại
 };
 
-// Định nghĩa cấu trúc Point (dùng chung cho Snake và Racing)
+// Cấu trúc lưu tọa độ điểm
 struct Point {
-    int x;
-    int y;
+    int x; // Tọa độ X
+    int y; // Tọa độ Y
 };
 
-// Định nghĩa cấu trúc cho vật cản (dùng chung cho Snake và Racing)
+// Cấu trúc lưu thông tin chướng ngại vật
 struct Obstacle {
-    int x;          // Tọa độ x của vật cản (dùng cho Racing)
-    int y;          // Tọa độ y của vật cản (dùng cho Racing)
-    bool isMoving;  // Vật cản có di chuyển không (dùng cho Racing)
-    int direction;  // Hướng di chuyển (1: phải, -1: trái) (dùng cho Racing)
-    Point points[8]; // Mảng các điểm của vật cản (dùng cho Snake)
-    int length;     // Độ dài vật cản (dùng cho Snake)
+    int x;          // Tọa độ X (cho Racing)
+    int y;          // Tọa độ Y (cho Racing)
+    bool isMoving;  // Chướng ngại có di chuyển không (Racing)
+    int direction;  // Hướng di chuyển (1: phải, -1: trái) (Racing)
+    Point points[8]; // Mảng các điểm của chướng ngại (Snake)
+    int length;     // Độ dài chướng ngại (Snake)
 };
 
 // Định nghĩa số lượng game và nút bấm
-#define NUM_GAMES 2
-#define NUM_BUTTONS 6
+#define NUM_GAMES 2     // Số game (Snake, Racing)
+#define NUM_BUTTONS 6   // Số nút bấm
 
 // Định nghĩa các chân GPIO cho nút bấm
 #define BTN_UP_PIN     25
@@ -58,18 +60,18 @@ struct Obstacle {
 #define PIN_BACKLIGHT  4
 
 // Khai báo các biến toàn cục
-extern TFT_eSPI display;
-extern QueueHandle_t buttonQueue;
-extern SemaphoreHandle_t tftMutex;
-extern SemaphoreHandle_t stateMutex;
-extern SemaphoreHandle_t buttonMutex;
+extern TFT_eSPI display;               // Đối tượng màn hình TFT
+extern QueueHandle_t buttonQueue;      // Hàng đợi sự kiện nút bấm
+extern SemaphoreHandle_t tftMutex;     // Khóa bảo vệ màn hình
+extern SemaphoreHandle_t stateMutex;   // Khóa bảo vệ trạng thái
+extern SemaphoreHandle_t buttonMutex;  // Khóa bảo vệ nút bấm
 
-extern bool buttonStates[NUM_BUTTONS];
-extern bool lastButtonStates[NUM_BUTTONS];
+extern bool buttonStates[NUM_BUTTONS];    // Trạng thái hiện tại của nút
+extern bool lastButtonStates[NUM_BUTTONS];// Trạng thái trước đó của nút
 
 // Khai báo các hàm chung
-bool checkButton(Button button);
-void processButtonPress(Button button);
-void handleMenu();
+bool checkButton(Button button);           // Kiểm tra trạng thái nút
+void processButtonPress(Button button);    // Xử lý sự kiện nhấn nút
+void handleMenu();                         // Xử lý menu chính
 
 #endif
